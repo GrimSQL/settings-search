@@ -1,2 +1,15 @@
-# Example
-An example greeter plugin
+# Settings Search
+
+Find individual RuneLite settings across built-in and installed Plugin Hub plugins, including disabled plugins. Search by setting name, plugin, section, description, or keyword.
+
+![Settings Search sidebar](docs/settings-search.png)
+
+- Open the magnifying glass in the RuneLite sidebar and try `idle notification` or `zoom limit`.
+- **Fuzzy search** matches common typos such as `notificaiton`. Hover over the checkbox for an explanation. RuneLite remembers the choice in the current profile.
+- Select a result to see its plugin, section, and description. Double-click it or use **Open plugin settings** to jump to the plugin's configuration page.
+
+The index uses metadata from RuneLite's standard configuration panels. It includes RuneLite and Chat Color. Custom controls outside the standard panels are outside its scope. Searches run locally.
+
+## Development
+
+Requires Java 11 or newer. Run `./gradlew test` for the search tests or `./gradlew run` to open a separate test client. On Windows, use `.\gradlew.bat`.
