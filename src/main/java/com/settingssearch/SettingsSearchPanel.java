@@ -7,6 +7,7 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridLayout;
+import java.awt.Insets;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -16,7 +17,6 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
-import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
@@ -25,8 +25,6 @@ import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
-import javax.swing.JTextArea;
-import javax.swing.JTextField;
 import javax.swing.JTextPane;
 import javax.swing.KeyStroke;
 import javax.swing.ListCellRenderer;
@@ -39,35 +37,37 @@ import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
 import net.runelite.client.ui.ColorScheme;
+import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.ui.components.IconTextField;
+import net.runelite.client.ui.components.PluginErrorPanel;
 
 final class SettingsSearchPanel extends PluginPanel
 {
 	private static final Color CANVAS = ColorScheme.DARK_GRAY_COLOR;
 	private static final Color SURFACE = ColorScheme.DARKER_GRAY_COLOR;
-	private static final Color LINE = ColorScheme.MEDIUM_GRAY_COLOR;
 	private static final Color TEXT = Color.WHITE;
 	private static final Color MUTED = ColorScheme.LIGHT_GRAY_COLOR;
 	private static final Color ACCENT = ColorScheme.BRAND_ORANGE;
-	private static final int ROW_HEIGHT = 42;
+	private static final int ROW_HEIGHT = 40;
 	private static final String MATCHES = "matches";
 	private static final String MESSAGE = "message";
-	private static final Font BODY = new Font(Font.SANS_SERIF, Font.PLAIN, 12);
-	private static final Font SMALL = BODY.deriveFont(11f);
-	private static final Font BOLD = BODY.deriveFont(Font.BOLD);
+	private static final Font BODY = FontManager.getRunescapeFont();
+	private static final Font SMALL = FontManager.getRunescapeSmallFont();
+	private static final Font BOLD = FontManager.getRunescapeBoldFont();
 
 	private final Supplier<List<Setting>> indexLoader;
 	private final BooleanSupplier fuzzySetting;
-	private final JTextField query = new JTextField();
+	private final IconTextField query = new IconTextField();
 	private final JCheckBox fuzzy = new JCheckBox("Fuzzy search");
 	private final JLabel status = new JLabel();
 	private final DefaultListModel<Setting> model = new DefaultListModel<>();
 	private final JList<Setting> results = new JList<>(model);
 	private final CardLayout cards = new CardLayout();
 	private final JPanel content = new JPanel(cards);
-	private final JPanel message = new JPanel(new BorderLayout(0, 10));
-	private final JTextArea messageText = textArea(3, MUTED);
-	private final JPanel suggestions = new JPanel(new GridLayout(0, 1, 0, 5));
+	private final JPanel message = new JPanel(new BorderLayout(0, 12));
+	private final PluginErrorPanel messageText = new PluginErrorPanel();
+	private final JPanel suggestions = new JPanel(new GridLayout(1, 0, 5, 0));
 	private final JPanel preview = new JPanel(new BorderLayout(0, 8));
 	private final JTextPane details = new JTextPane();
 	private final JButton open = new JButton("Open plugin settings");
@@ -84,24 +84,15 @@ final class SettingsSearchPanel extends PluginPanel
 		this.indexLoader = indexLoader;
 		this.fuzzySetting = fuzzySetting;
 		searchTimer.setRepeats(false);
-		setLayout(new BorderLayout(0, 12));
-		setBorder(BorderFactory.createEmptyBorder(14, 12, 12, 12));
+		setLayout(new BorderLayout(0, 5));
+		setBorder(BorderFactory.createEmptyBorder(5, 8, 8, 8));
 		setBackground(CANVAS);
 
-		JLabel title = new JLabel("Settings Search");
-		title.setFont(BODY.deriveFont(Font.BOLD, 18f));
-		title.setForeground(TEXT);
-		title.setLabelFor(query);
-		query.setFont(BODY);
-		query.setForeground(TEXT);
-		query.setCaretColor(TEXT);
+		query.setIcon(IconTextField.Icon.SEARCH);
 		query.setBackground(SURFACE);
-		query.setPreferredSize(new Dimension(140, 34));
+		query.setHoverBackgroundColor(ColorScheme.DARK_GRAY_HOVER_COLOR);
+		query.setPreferredSize(new Dimension(100, 30));
 		query.getAccessibleContext().setAccessibleName("Search plugin settings");
-		query.putClientProperty("JTextField.placeholderText", "Find a setting");
-		query.putClientProperty("JTextField.showClearButton", true);
-		query.putClientProperty("JTextField.leadingComponent",
-			new JLabel(new ImageIcon(SettingsSearchPlugin.searchIcon(MUTED))));
 		query.setToolTipText("Search by setting, plugin, section, or description");
 
 		fuzzy.setFont(BODY);
@@ -111,10 +102,9 @@ final class SettingsSearchPanel extends PluginPanel
 		fuzzy.setToolTipText(SettingsSearchConfig.FUZZY_DESCRIPTION);
 		fuzzy.getAccessibleContext().setAccessibleDescription(SettingsSearchConfig.FUZZY_DESCRIPTION);
 
-		JPanel header = new JPanel(new BorderLayout(0, 9));
+		JPanel header = new JPanel(new BorderLayout(0, 4));
 		header.setOpaque(false);
-		header.add(title, BorderLayout.NORTH);
-		header.add(query, BorderLayout.CENTER);
+		header.add(query, BorderLayout.NORTH);
 		JPanel options = new JPanel(new BorderLayout(5, 0));
 		options.setOpaque(false);
 		status.setFont(SMALL);
@@ -129,7 +119,7 @@ final class SettingsSearchPanel extends PluginPanel
 		results.setCellRenderer(new SettingRenderer());
 		results.setFixedCellHeight(ROW_HEIGHT);
 		results.getAccessibleContext().setAccessibleName("Matching settings");
-		listScroll.setBorder(BorderFactory.createLineBorder(LINE));
+		listScroll.setBorder(BorderFactory.createEmptyBorder());
 		listScroll.getViewport().setBackground(SURFACE);
 		listScroll.getVerticalScrollBar().setUnitIncrement(ROW_HEIGHT);
 		listScroll.setPreferredSize(new Dimension(0, ROW_HEIGHT * 4));
@@ -138,16 +128,14 @@ final class SettingsSearchPanel extends PluginPanel
 		add(content, BorderLayout.CENTER);
 
 		message.setOpaque(false);
-		message.setBorder(BorderFactory.createEmptyBorder(8, 2, 0, 2));
 		message.add(messageText, BorderLayout.NORTH);
 		suggestions.setOpaque(false);
-		for (String suggestion : List.of("idle notification", "zoom limit"))
+		for (String suggestion : List.of("Idle Notification", "Zoom Limit"))
 		{
 			JButton button = new JButton(suggestion);
-			button.setHorizontalAlignment(JButton.LEFT);
 			button.setFont(BODY);
-			button.setForeground(ACCENT);
 			button.setBackground(SURFACE);
+			button.setMargin(new Insets(3, 4, 3, 4));
 			button.addActionListener(event ->
 			{
 				query.setText(suggestion);
@@ -161,7 +149,7 @@ final class SettingsSearchPanel extends PluginPanel
 		messageBody.add(suggestions, BorderLayout.NORTH);
 		message.add(messageBody, BorderLayout.CENTER);
 
-		details.setFont(BODY.deriveFont(13f));
+		details.setFont(BODY);
 		details.setEditable(false);
 		details.setBackground(SURFACE);
 		details.setForeground(TEXT);
@@ -171,13 +159,11 @@ final class SettingsSearchPanel extends PluginPanel
 		detailScroll.getViewport().setBackground(SURFACE);
 		detailScroll.setBorder(BorderFactory.createEmptyBorder());
 
-		open.setFont(BOLD);
-		open.setForeground(SURFACE);
-		open.setBackground(ACCENT);
-		open.setPreferredSize(new Dimension(160, 34));
+		open.setFont(BODY);
+		open.setBackground(CANVAS);
+		open.setPreferredSize(new Dimension(160, 28));
 		preview.setBackground(SURFACE);
-		preview.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(LINE),
-			BorderFactory.createEmptyBorder(9, 9, 9, 9)));
+		preview.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 		preview.setPreferredSize(new Dimension(0, 162));
 		preview.setMinimumSize(new Dimension(0, 100));
 		preview.add(detailScroll, BorderLayout.CENTER);
@@ -245,7 +231,7 @@ final class SettingsSearchPanel extends PluginPanel
 				results.requestFocusInWindow();
 			}
 		});
-		showMessage("", "Search across your installed plugins by name or keyword.", true);
+		showEmptySearch();
 		showSelection();
 	}
 
@@ -294,7 +280,7 @@ final class SettingsSearchPanel extends PluginPanel
 		String text = query.getText();
 		if (SettingSearch.normalize(text).isEmpty())
 		{
-			showMessage("", "Search across your installed plugins by name or keyword.", true);
+			showEmptySearch();
 			return;
 		}
 
@@ -305,9 +291,9 @@ final class SettingsSearchPanel extends PluginPanel
 		List<Setting> matches = SettingSearch.find(index, text, fuzzy.isSelected());
 		if (matches.isEmpty())
 		{
-			String hint = fuzzy.isSelected() ? "Try fewer words or a different keyword."
-				: "Try fewer words or enable Fuzzy search to find close matches.";
-			showMessage("0 results", "No matching settings.\n" + hint, false);
+			String hint = fuzzy.isSelected() ? "Try fewer words or<br>a different keyword."
+				: "Try fewer words or<br>enable Fuzzy search.";
+			showMessage("No matching settings", hint, false);
 			return;
 		}
 
@@ -318,10 +304,15 @@ final class SettingsSearchPanel extends PluginPanel
 		results.ensureIndexIsVisible(0);
 	}
 
+	private void showEmptySearch()
+	{
+		showMessage("Settings Search", "Search installed plugins<br>by setting name or keyword.", true);
+	}
+
 	private void showMessage(String heading, String body, boolean showSuggestions)
 	{
-		status.setText(heading);
-		messageText.setText(body);
+		status.setText("");
+		messageText.setContent(heading, body);
 		suggestions.setVisible(showSuggestions);
 		cards.show(content, MESSAGE);
 	}
@@ -339,23 +330,23 @@ final class SettingsSearchPanel extends PluginPanel
 		String location = selected.location();
 		details.setText(selected.name + "\n" + location + "\n\n" + selected.description);
 		StyledDocument document = details.getStyledDocument();
-		document.setCharacterAttributes(0, document.getLength(), detailStyle(TEXT, 13, false), true);
-		document.setCharacterAttributes(0, selected.name.length(), detailStyle(TEXT, 16, true), true);
+		document.setCharacterAttributes(0, document.getLength(), detailStyle(TEXT, BODY), true);
+		document.setCharacterAttributes(0, selected.name.length(), detailStyle(TEXT, BOLD), true);
 		document.setCharacterAttributes(selected.name.length() + 1, location.length(),
-			detailStyle(MUTED, 12, false), true);
+			detailStyle(MUTED, SMALL), true);
 		SimpleAttributeSet spacing = new SimpleAttributeSet();
 		StyleConstants.setLineSpacing(spacing, 0.18f);
 		document.setParagraphAttributes(0, document.getLength(), spacing, false);
 		details.setCaretPosition(0);
 	}
 
-	private static SimpleAttributeSet detailStyle(Color foreground, int size, boolean bold)
+	private static SimpleAttributeSet detailStyle(Color foreground, Font font)
 	{
 		SimpleAttributeSet style = new SimpleAttributeSet();
-		StyleConstants.setFontFamily(style, BODY.getFamily());
+		StyleConstants.setFontFamily(style, font.getFamily());
 		StyleConstants.setForeground(style, foreground);
-		StyleConstants.setFontSize(style, size);
-		StyleConstants.setBold(style, bold);
+		StyleConstants.setFontSize(style, font.getSize());
+		StyleConstants.setBold(style, font.isBold());
 		return style;
 	}
 
@@ -371,18 +362,6 @@ final class SettingsSearchPanel extends PluginPanel
 		{
 			selected.open.run();
 		}
-	}
-
-	private static JTextArea textArea(int rows, Color foreground)
-	{
-		JTextArea area = new JTextArea(rows, 0);
-		area.setFont(BODY);
-		area.setForeground(foreground);
-		area.setOpaque(false);
-		area.setEditable(false);
-		area.setLineWrap(true);
-		area.setWrapStyleWord(true);
-		return area;
 	}
 
 	private static JScrollPane scrollPane(JComponent component)
@@ -416,10 +395,10 @@ final class SettingsSearchPanel extends PluginPanel
 			location.setText(setting.location());
 			name.setForeground(TEXT);
 			location.setForeground(MUTED);
-			setBackground(selected ? LINE : SURFACE);
+			setBackground(selected ? ColorScheme.DARKER_GRAY_HOVER_COLOR : SURFACE);
 			setBorder(BorderFactory.createCompoundBorder(
-				BorderFactory.createMatteBorder(0, 2, 1, 0, selected || focused ? ACCENT : SURFACE),
-				BorderFactory.createEmptyBorder(4, 7, 4, 8)));
+				BorderFactory.createMatteBorder(0, 0, 1, 0, selected || focused ? ACCENT : CANVAS),
+				BorderFactory.createEmptyBorder(4, 8, 4, 8)));
 			return this;
 		}
 
