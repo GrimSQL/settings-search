@@ -1,5 +1,6 @@
 package com.settingssearch;
 
+import com.google.common.html.HtmlEscapers;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
@@ -22,7 +23,9 @@ import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextPane;
@@ -31,8 +34,10 @@ import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.Timer;
+import javax.swing.UIManager;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.plaf.basic.BasicGraphicsUtils;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
@@ -52,22 +57,24 @@ final class SettingsSearchPanel extends PluginPanel
 	private static final int ROW_HEIGHT = 40;
 	private static final String MATCHES = "matches";
 	private static final String MESSAGE = "message";
+	private static final String EMPTY = "empty";
 	private static final Font BODY = FontManager.getRunescapeFont();
 	private static final Font SMALL = FontManager.getRunescapeSmallFont();
 	private static final Font BOLD = FontManager.getRunescapeBoldFont();
 
 	private final Supplier<List<Setting>> indexLoader;
 	private final BooleanSupplier fuzzySetting;
+	private final SearchHistory history;
 	private final IconTextField query = new IconTextField();
+	private final JButton historyButton = new JButton(UIManager.getIcon("Tree.expandedIcon"));
+	private final JPopupMenu historyMenu = new JPopupMenu();
 	private final JCheckBox fuzzy = new JCheckBox("Fuzzy search");
 	private final JLabel status = new JLabel();
 	private final DefaultListModel<Setting> model = new DefaultListModel<>();
 	private final JList<Setting> results = new JList<>(model);
 	private final CardLayout cards = new CardLayout();
 	private final JPanel content = new JPanel(cards);
-	private final JPanel message = new JPanel(new BorderLayout(0, 12));
 	private final PluginErrorPanel messageText = new PluginErrorPanel();
-	private final JPanel suggestions = new JPanel(new GridLayout(1, 0, 5, 0));
 	private final JPanel preview = new JPanel(new BorderLayout(0, 8));
 	private final JTextPane details = new JTextPane();
 	private final JButton open = new JButton("Open plugin settings");
@@ -75,14 +82,16 @@ final class SettingsSearchPanel extends PluginPanel
 	private final Timer searchTimer = new Timer(100, event -> search());
 
 	private List<Setting> index;
+	private String renderedQuery = "";
 	private boolean active;
 
 	SettingsSearchPanel(Supplier<List<Setting>> indexLoader, BooleanSupplier fuzzySetting,
-		Consumer<Boolean> saveFuzzy)
+		Consumer<Boolean> saveFuzzy, SearchHistory history)
 	{
 		super(false);
 		this.indexLoader = indexLoader;
 		this.fuzzySetting = fuzzySetting;
+		this.history = history;
 		searchTimer.setRepeats(false);
 		setLayout(new BorderLayout(0, 5));
 		setBorder(BorderFactory.createEmptyBorder(5, 8, 8, 8));
@@ -94,6 +103,18 @@ final class SettingsSearchPanel extends PluginPanel
 		query.setPreferredSize(new Dimension(100, 30));
 		query.getAccessibleContext().setAccessibleName("Search plugin settings");
 		query.setToolTipText("Search by setting, plugin, section, or description");
+		query.addClearListener(this::search);
+
+		historyButton.setBackground(SURFACE);
+		historyButton.setMargin(new Insets(0, 0, 0, 0));
+		historyButton.setPreferredSize(new Dimension(26, 30));
+		historyButton.setToolTipText("Recent searches");
+		historyButton.getAccessibleContext().setAccessibleName("Recent searches");
+		historyButton.addActionListener(event -> showHistory());
+		JPanel searchRow = new JPanel(new BorderLayout(2, 0));
+		searchRow.setOpaque(false);
+		searchRow.add(query, BorderLayout.CENTER);
+		searchRow.add(historyButton, BorderLayout.EAST);
 
 		fuzzy.setFont(BODY);
 		fuzzy.setForeground(TEXT);
@@ -104,7 +125,7 @@ final class SettingsSearchPanel extends PluginPanel
 
 		JPanel header = new JPanel(new BorderLayout(0, 4));
 		header.setOpaque(false);
-		header.add(query, BorderLayout.NORTH);
+		header.add(searchRow, BorderLayout.NORTH);
 		JPanel options = new JPanel(new BorderLayout(5, 0));
 		options.setOpaque(false);
 		status.setFont(SMALL);
@@ -126,28 +147,6 @@ final class SettingsSearchPanel extends PluginPanel
 		listScroll.setMinimumSize(new Dimension(0, ROW_HEIGHT * 2));
 		content.setOpaque(false);
 		add(content, BorderLayout.CENTER);
-
-		message.setOpaque(false);
-		message.add(messageText, BorderLayout.NORTH);
-		suggestions.setOpaque(false);
-		for (String suggestion : List.of("Idle Notification", "Zoom Limit"))
-		{
-			JButton button = new JButton(suggestion);
-			button.setFont(BODY);
-			button.setBackground(SURFACE);
-			button.setMargin(new Insets(3, 4, 3, 4));
-			button.addActionListener(event ->
-			{
-				query.setText(suggestion);
-				search();
-				query.requestFocusInWindow();
-			});
-			suggestions.add(button);
-		}
-		JPanel messageBody = new JPanel(new BorderLayout());
-		messageBody.setOpaque(false);
-		messageBody.add(suggestions, BorderLayout.NORTH);
-		message.add(messageBody, BorderLayout.CENTER);
 
 		details.setFont(BODY);
 		details.setEditable(false);
@@ -176,7 +175,13 @@ final class SettingsSearchPanel extends PluginPanel
 		split.setResizeWeight(0.54);
 		split.getAccessibleContext().setAccessibleName("Resize search results and setting description");
 		content.add(split, MATCHES);
+		JPanel message = new JPanel(new BorderLayout());
+		message.setOpaque(false);
+		message.add(messageText, BorderLayout.NORTH);
 		content.add(message, MESSAGE);
+		JPanel empty = new JPanel();
+		empty.setOpaque(false);
+		content.add(empty, EMPTY);
 
 		query.getDocument().addDocumentListener(new DocumentListener()
 		{
@@ -210,10 +215,18 @@ final class SettingsSearchPanel extends PluginPanel
 			public void mouseClicked(MouseEvent event)
 			{
 				int row = results.locationToIndex(event.getPoint());
-				if (event.getButton() == MouseEvent.BUTTON1 && event.getClickCount() == 2 && row >= 0
-					&& results.getCellBounds(row, row).contains(event.getPoint()))
+				if (event.getButton() != MouseEvent.BUTTON1 || row < 0
+					|| !results.getCellBounds(row, row).contains(event.getPoint()))
+				{
+					return;
+				}
+				if (event.getClickCount() == 2)
 				{
 					openSelected();
+				}
+				else if (!searchTimer.isRunning())
+				{
+					history.remember(renderedQuery, model.get(row));
 				}
 			}
 		});
@@ -226,12 +239,13 @@ final class SettingsSearchPanel extends PluginPanel
 			{
 				search();
 			}
+			history.remember(renderedQuery, null);
 			if (!model.isEmpty())
 			{
 				results.requestFocusInWindow();
 			}
 		});
-		showEmptySearch();
+		cards.show(content, EMPTY);
 		showSelection();
 	}
 
@@ -247,8 +261,14 @@ final class SettingsSearchPanel extends PluginPanel
 	@Override
 	public void onDeactivate()
 	{
+		if (active)
+		{
+			String text = query.getText();
+			history.remember(text.isBlank() ? renderedQuery : text, null);
+		}
 		active = false;
 		searchTimer.stop();
+		historyMenu.setVisible(false);
 	}
 
 	void refreshFuzzySetting()
@@ -280,9 +300,13 @@ final class SettingsSearchPanel extends PluginPanel
 		String text = query.getText();
 		if (SettingSearch.normalize(text).isEmpty())
 		{
-			showEmptySearch();
+			history.remember(renderedQuery, null);
+			renderedQuery = "";
+			status.setText("");
+			cards.show(content, EMPTY);
 			return;
 		}
+		renderedQuery = text;
 
 		if (index == null)
 		{
@@ -293,7 +317,9 @@ final class SettingsSearchPanel extends PluginPanel
 		{
 			String hint = fuzzy.isSelected() ? "Try fewer words or<br>a different keyword."
 				: "Try fewer words or<br>enable Fuzzy search.";
-			showMessage("No matching settings", hint, false);
+			status.setText("");
+			messageText.setContent("No matching settings", hint);
+			cards.show(content, MESSAGE);
 			return;
 		}
 
@@ -304,17 +330,56 @@ final class SettingsSearchPanel extends PluginPanel
 		results.ensureIndexIsVisible(0);
 	}
 
-	private void showEmptySearch()
+	private void showHistory()
 	{
-		showMessage("Settings Search", "Search installed plugins<br>by setting name or keyword.", true);
+		historyMenu.removeAll();
+		List<SearchHistory.Entry> entries = history.entries();
+		if (entries.isEmpty())
+		{
+			JMenuItem empty = new JMenuItem("No recent searches");
+			empty.setEnabled(false);
+			historyMenu.add(empty);
+		}
+		int width = query.getParent().getWidth();
+		for (SearchHistory.Entry entry : entries)
+		{
+			JMenuItem item = new JMenuItem();
+			item.setFont(BODY);
+			String result = entry.settingName == null ? "" : entry.settingName + " / " + entry.plugin;
+			String title = clippedMenuText(item, entry.query, width - 24);
+			String subtitle = result.isEmpty() ? "" : "<br><small>" + clippedMenuText(item, result, width - 24) + "</small>";
+			item.setText("<html>" + title + subtitle + "</html>");
+			item.getAccessibleContext().setAccessibleName(result.isEmpty() ? entry.query : entry.query + ", " + result);
+			item.setToolTipText("<html>" + HtmlEscapers.htmlEscaper().escape(entry.query)
+				+ (result.isEmpty() ? "" : "<br>" + HtmlEscapers.htmlEscaper().escape(result)) + "</html>");
+			item.addActionListener(event -> restoreSearch(entry));
+			historyMenu.add(item);
+		}
+		historyMenu.setPopupSize(width, historyMenu.getLayout().preferredLayoutSize(historyMenu).height);
+		historyMenu.show(query, 0, query.getHeight());
 	}
 
-	private void showMessage(String heading, String body, boolean showSuggestions)
+	private static String clippedMenuText(JMenuItem item, String text, int width)
 	{
-		status.setText("");
-		messageText.setContent(heading, body);
-		suggestions.setVisible(showSuggestions);
-		cards.show(content, MESSAGE);
+		String clipped = BasicGraphicsUtils.getClippedString(item, item.getFontMetrics(item.getFont()), text, width);
+		return HtmlEscapers.htmlEscaper().escape(clipped);
+	}
+
+	private void restoreSearch(SearchHistory.Entry entry)
+	{
+		query.setText(entry.query);
+		search();
+		for (int row = 0; row < model.size(); row++)
+		{
+			if (entry.matches(model.get(row)))
+			{
+				results.setSelectedIndex(row);
+				results.ensureIndexIsVisible(row);
+				break;
+			}
+		}
+		history.remember(entry.query, null);
+		query.requestFocusInWindow();
 	}
 
 	private void showSelection()
@@ -360,6 +425,7 @@ final class SettingsSearchPanel extends PluginPanel
 		Setting selected = results.getSelectedValue();
 		if (selected != null)
 		{
+			history.remember(renderedQuery, selected);
 			selected.open.run();
 		}
 	}

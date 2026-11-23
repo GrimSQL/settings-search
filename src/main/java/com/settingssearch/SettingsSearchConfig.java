@@ -9,6 +9,7 @@ public interface SettingsSearchConfig extends Config
 {
 	String GROUP = "settings-search";
 	String FUZZY_KEY = "fuzzySearch";
+	String HISTORY_KEY = "searchHistory";
 	String FUZZY_DESCRIPTION = "Finds close matches for typos, for example “notificaiton” also finds “notification”. "
 		+ "Turn this off to match only the letters you type.";
 

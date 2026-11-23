@@ -1,5 +1,6 @@
 package com.settingssearch;
 
+import com.google.gson.Gson;
 import com.google.inject.Provides;
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -51,6 +52,8 @@ public class SettingsSearchPlugin extends Plugin
 	@Inject
 	private SettingsSearchConfig config;
 	@Inject
+	private Gson gson;
+	@Inject
 	private ClientToolbar toolbar;
 	@Inject
 	private EventBus eventBus;
@@ -62,8 +65,12 @@ public class SettingsSearchPlugin extends Plugin
 	@Override
 	protected void startUp()
 	{
+		SearchHistory history = new SearchHistory(gson,
+			() -> configManager.getConfiguration(SettingsSearchConfig.GROUP, SettingsSearchConfig.HISTORY_KEY),
+			value -> configManager.setConfiguration(SettingsSearchConfig.GROUP, SettingsSearchConfig.HISTORY_KEY, value));
 		panel = new SettingsSearchPanel(this::buildIndex, config::fuzzySearch,
-			enabled -> configManager.setConfiguration(SettingsSearchConfig.GROUP, SettingsSearchConfig.FUZZY_KEY, enabled));
+			enabled -> configManager.setConfiguration(SettingsSearchConfig.GROUP, SettingsSearchConfig.FUZZY_KEY, enabled),
+			history);
 		navigation = NavigationButton.builder()
 			.tooltip("Settings Search")
 			.icon(searchIcon(ColorScheme.LIGHT_GRAY_COLOR))

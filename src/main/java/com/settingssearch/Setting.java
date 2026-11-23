@@ -12,6 +12,7 @@ final class Setting
 	final String plugin;
 	final String section;
 	final String description;
+	final String key;
 	final Runnable open;
 	final String normalizedName;
 	final List<List<String>> searchFields;
@@ -23,6 +24,7 @@ final class Setting
 		this.plugin = plugin;
 		this.section = section;
 		this.description = description;
+		this.key = key;
 		this.open = open;
 		normalizedName = SettingSearch.normalize(name);
 		searchFields = new ArrayList<>();
