@@ -6,7 +6,7 @@ Find individual RuneLite settings across built-in and installed Plugin Hub plugi
 
 Open **Plugin Hub** in RuneLite, search for **Settings Search**, and click **Install**.
 
-![Settings Search sidebar](docs/settings-search.png)
+![Settings Search showing matching settings and the recent searches dropdown](docs/settings-search.png)
 
 - Open the magnifying glass in the RuneLite sidebar to search. Use the arrow next to the search field to revisit your last ten searches and the settings you selected.
 - **Fuzzy search** matches common typos such as `notificaiton`. Hover over the checkbox for an explanation. RuneLite remembers the choice in the current profile.
